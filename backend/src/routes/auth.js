@@ -1,13 +1,40 @@
-import { Router } from 'express'; import bcrypt from 'bcryptjs'; import jwt from 'jsonwebtoken'; import { pool } from '../db.js'; import { auth } from '../middleware/auth.js';
-const router = Router();
+const express = require('express');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const pool = require('../db');
+const router = express.Router();
+
 router.post('/login', async (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password) return res.status(400).json({ error: 'username e senha são obrigatórios' });
-  const { rows } = await pool.query('SELECT id, username, name, password_hash, role, store_id FROM users WHERE username=$1 LIMIT 1', [username]);
-  const u = rows[0]; if (!u) return res.status(401).json({ error: 'Credenciais inválidas' });
-  const ok = await bcrypt.compare(password, u.password_hash); if (!ok) return res.status(401).json({ error: 'Credenciais inválidas' });
-  const token = jwt.sign({ id:u.id, username:u.username, name:u.name, role:u.role, store_id:u.store_id }, process.env.JWT_SECRET, { expiresIn:'10h' });
-  res.json({ token, user: { id:u.id, username:u.username, name:u.name, role:u.role, store_id:u.store_id } });
+  try {
+    const { username, password } = req.body || {};
+    if (!username || !password) {
+      return res.status(400).json({ error: 'username e password são obrigatórios' });
+    }
+
+    const { rows } = await pool.query(
+      'SELECT id, username, password_hash, role, lock_loja, store_id FROM users WHERE username = $1 LIMIT 1',
+      [username]
+    );
+    const user = rows[0];
+    if (!user) return res.status(401).json({ error: 'Credenciais inválidas' });
+
+    const ok = await bcrypt.compare(password, user.password_hash);
+    if (!ok) return res.status(401).json({ error: 'Credenciais inválidas' });
+
+    const token = jwt.sign(
+      { sub: user.id, role: user.role, store_id: user.store_id },
+      process.env.JWT_SECRET,
+      { expiresIn: '12h' }
+    );
+
+    res.json({
+      token,
+      user: { id: user.id, username: user.username, role: user.role, store_id: user.store_id }
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Erro ao autenticar' });
+  }
 });
-router.get('/me', auth(), (req,res)=>res.json({ user: req.user }));
-export default router;
+
+module.exports = router;

@@ -1,6 +1,50 @@
-import { Router } from 'express'; import { pool } from '../db.js'; import { auth } from '../middleware/auth.js'; const router=Router();
-function build(query,isOp,storeId){ const where=[],params=[]; if(query.start_date){ where.push(`created_at >= $${where.length+1}`); params.push(query.start_date+' 00:00:00') } if(query.end_date){ where.push(`created_at < $${where.length+1}`); params.push(query.end_date+' 23:59:59.999') } if(isOp){ where.push(`store_id = $${where.length+1}`); params.push(storeId) } else if(query.store_id){ where.push(`store_id = $${where.length+1}`); params.push(query.store_id) } return { where: where.length?('WHERE '+where.join(' AND ')):'', params } }
-router.get('/overview', auth(), async (req,res)=>{ const isOp=req.user.role==='OPERATOR'; const f=build(req.query,isOp,req.user.store_id); const totalClients=await pool.query('SELECT COUNT(*)::int AS c FROM clients'); const totalVisits=await pool.query(`SELECT COUNT(*)::int AS c FROM visits ${f.where}`, f.params); const totalRedeems=await pool.query(`SELECT COUNT(*)::int AS c FROM redemptions ${f.where}`, f.params); res.json({ total_clients: totalClients.rows[0].c, total_visits: totalVisits.rows[0].c, total_rewards: totalRedeems.rows[0].c }) });
-router.get('/visits_by_day', auth(), async (req,res)=>{ const isOp=req.user.role==='OPERATOR'; const f=build(req.query,isOp,req.user.store_id); const { rows } = await pool.query(`SELECT to_char(date_trunc('day', created_at),'YYYY-MM-DD') AS day, COUNT(*)::int AS qty FROM visits ${f.where} GROUP BY 1 ORDER BY 1`, f.params); res.json(rows) });
-router.get('/top_clients', auth(), async (req,res)=>{ const isOp=req.user.role==='OPERATOR'; const f=build(req.query,isOp,req.user.store_id); const prefix=f.where?(f.where+' AND '):'WHERE '; const { rows } = await pool.query(`SELECT c.id, c.name, COUNT(v.*)::int AS visits FROM visits v JOIN clients c ON c.id=v.client_id ${prefix} 1=1 GROUP BY c.id,c.name ORDER BY visits DESC LIMIT 10`, f.params); res.json(rows) });
-export default router;
+const express = require('express');
+const pool = require('../db');
+const { auth } = require('../middleware/auth');
+const router = express.Router();
+
+/**
+ * Relatório geral: total de clientes, visitas e resgates
+ */
+router.get('/geral', auth('ADMIN'), async (_req, res) => {
+  try {
+    const { rows: clientes } = await pool.query('SELECT COUNT(*) AS total FROM clients');
+    const { rows: visitas } = await pool.query('SELECT COUNT(*) AS total FROM visits');
+    const { rows: resgates } = await pool.query('SELECT COUNT(*) AS total FROM redemptions');
+
+    res.json({
+      clientes: parseInt(clientes[0].total),
+      visitas: parseInt(visitas[0].total),
+      resgates: parseInt(resgates[0].total),
+    });
+  } catch (err) {
+    console.error('Erro ao gerar relatório geral:', err);
+    res.status(500).json({ error: 'Erro ao gerar relatório geral' });
+  }
+});
+
+/**
+ * Relatório por loja
+ */
+router.get('/por-loja', auth('ADMIN'), async (_req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT s.name AS loja,
+             COUNT(DISTINCT c.id) AS clientes,
+             COUNT(DISTINCT v.id) AS visitas,
+             COUNT(DISTINCT r.id) AS resgates
+      FROM stores s
+      LEFT JOIN clients c ON c.store_id = s.id
+      LEFT JOIN visits v ON v.store_id = s.id
+      LEFT JOIN redemptions r ON r.store_id = s.id
+      GROUP BY s.id, s.name
+      ORDER BY s.name
+    `);
+    res.json(rows);
+  } catch (err) {
+    console.error('Erro ao gerar relatório por loja:', err);
+    res.status(500).json({ error: 'Erro ao gerar relatório por loja' });
+  }
+});
+
+module.exports = router;

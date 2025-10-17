@@ -1,7 +1,12 @@
-import { Router } from 'express'; import { pool } from '../db.js'; import bcrypt from 'bcryptjs'; import { auth } from '../middleware/auth.js';
-const router=Router();
-router.get('/', auth('ADMIN'), async (_req,res)=>{ const { rows } = await pool.query('SELECT u.id, u.username, u.name, u.role, u.store_id, s.name AS store_name FROM users u LEFT JOIN stores s ON s.id=u.store_id ORDER BY u.id DESC'); res.json(rows) });
-router.post('/', auth('ADMIN'), async (req,res)=>{ const { username, name, password, role='OPERATOR', store_id=null } = req.body; if(!username||!name||!password) return res.status(400).json({ error:'username, name e password são obrigatórios' }); const hash=await bcrypt.hash(password,10); const { rows } = await pool.query('INSERT INTO users (username, name, password_hash, role, store_id) VALUES ($1,$2,$3,$4,$5) RETURNING id, username, name, role, store_id', [username.toLowerCase(), name, hash, role, store_id]); res.status(201).json(rows[0]) });
-router.put('/:id', auth('ADMIN'), async (req,res)=>{ const { id } = req.params; const { username, name, password, role, store_id } = req.body; if(password){ const hash=await bcrypt.hash(password,10); await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [hash, id]) } await pool.query('UPDATE users SET username=COALESCE($1,username), name=COALESCE($2,name), role=COALESCE($3,role), store_id=$4 WHERE id=$5', [username?.toLowerCase(), name, role, store_id ?? null, id]); const { rows } = await pool.query('SELECT id, username, name, role, store_id FROM users WHERE id=$1', [id]); res.json(rows[0]) });
-router.delete('/:id', auth('ADMIN'), async (req,res)=>{ await pool.query('DELETE FROM users WHERE id=$1', [req.params.id]); res.json({ ok:true }) });
-export default router;
+const express = require('express');
+const bcrypt = require('bcryptjs');
+const pool = require('../db');
+const { auth } = require('../middleware/auth');
+const router = express.Router();
+
+router.get('/', auth('ADMIN'), async (req, res) => {
+  const { rows } = await pool.query('SELECT id, name, username, role, store_id FROM users ORDER BY id ASC');
+  res.json(rows);
+});
+
+module.exports = router;

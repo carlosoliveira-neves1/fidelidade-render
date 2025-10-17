@@ -1,4 +1,29 @@
-import { Router } from 'express'; import { pool } from '../db.js'; import { auth } from '../middleware/auth.js'; const router=Router();
-router.get('/', auth(), async (req,res)=>{ const q=(req.query.q||'').trim(); let sql='SELECT id, name, cpf, phone, email, store_id, created_at FROM clients'; const params=[]; if(q){ sql+=' WHERE unaccent(name) ILIKE unaccent($1) OR cpf ILIKE $1 OR phone ILIKE $1 OR email ILIKE $1'; params.push('%'+q+'%') } sql+=' ORDER BY id DESC LIMIT 200'; const { rows } = await pool.query(sql, params); res.json(rows) });
-router.post('/', auth(), async (req,res)=>{ const { name, cpf='', phone='', email='', store_id=null } = req.body; if(!name) return res.status(400).json({ error:'name é obrigatório' }); const { rows } = await pool.query('INSERT INTO clients (name, cpf, phone, email, store_id) VALUES ($1,$2,$3,$4,$5) RETURNING *', [name, cpf, phone, email, store_id]); res.status(201).json(rows[0]) });
-export default router;
+const express = require('express');
+const pool = require('../db');
+const { auth } = require('../middleware/auth');
+const router = express.Router();
+
+router.get('/', auth(), async (req, res) => {
+  const q = (req.query.q || '').trim();
+  let sql = 'SELECT id, name, cpf, phone, email, store_id, created_at FROM clients';
+  const params = [];
+  if (q) {
+    sql += ' WHERE unaccent(name) ILIKE unaccent($1) OR cpf ILIKE $1 OR phone ILIKE $1 OR email ILIKE $1';
+    params.push('%' + q + '%');
+  }
+  sql += ' ORDER BY id DESC LIMIT 200';
+  const { rows } = await pool.query(sql, params);
+  res.json(rows);
+});
+
+router.post('/', auth(), async (req, res) => {
+  const { name, cpf = '', phone = '', email = '', store_id = null } = req.body;
+  if (!name) return res.status(400).json({ error: 'name é obrigatório' });
+  const { rows } = await pool.query(
+    'INSERT INTO clients (name, cpf, phone, email, store_id) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+    [name, cpf, phone, email, store_id]
+  );
+  res.status(201).json(rows[0]);
+});
+
+module.exports = router;
