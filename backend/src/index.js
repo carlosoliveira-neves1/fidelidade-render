@@ -1,11 +1,79 @@
-import express from 'express'; import cors from 'cors'; import helmet from 'helmet'; import dotenv from 'dotenv'; dotenv.config();
-import authRouter from './routes/auth.js'; import clientsRouter from './routes/clients.js'; import visitsRouter from './routes/visits.js'; import reportsRouter from './routes/reports.js';
-import usersRouter from './routes/users.js'; import storesRouter from './routes/stores.js'; import importExportRouter from './routes/import_export.js'; import redemptionsRouter from './routes/redemptions.js';
-const app = express(); app.use(helmet()); app.use(express.json());
-const origins=(process.env.ALLOWED_ORIGINS||'').split(',').map(s=>s.trim()).filter(Boolean);
-app.use(cors({origin:(o,cb)=>{ if(!o||origins.includes(o)) return cb(null,true); cb(new Error('CORS not allowed:'+o)) }, credentials:true}));
-app.get('/health', (_req,res)=>res.json({ok:true}));
-app.use('/api/auth', authRouter); app.use('/api/clients', clientsRouter); app.use('/api/visits', visitsRouter); app.use('/api/reports', reportsRouter);
-app.use('/api/users', usersRouter); app.use('/api/stores', storesRouter); app.use('/api/import-export', importExportRouter); app.use('/api/redemptions', redemptionsRouter);
-app.get('/', (_req,res)=>res.json({name:'CDC Fidelidade API', version:'2.2.0'}));
-const PORT=Number(process.env.PORT||3001), HOST=process.env.HOST||'0.0.0.0'; app.listen(PORT,HOST,()=>console.log(`✅ Backend http://${HOST}:${PORT}`));
+// backend/src/index.js
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const morgan = require('morgan');
+
+// Rotas
+const authRoutes = require('./routes/auth');
+const userRoutes = require('./routes/users');
+const clientRoutes = require('./routes/clients');
+const visitRoutes = require('./routes/visits');
+const redemptionRoutes = require('./routes/redemptions');
+const reportRoutes = require('./routes/reports');
+const storeRoutes = require('./routes/stores');
+const importExportRoutes = require('./routes/import_export');
+
+const app = express();
+
+/** ---------- CORS ---------- **/
+const allowed = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    // permitir ferramentas sem Origin (ex.: PowerShell/cURL/Postman)
+    if (!origin) return callback(null, true);
+    if (allowed.length === 0) return callback(null, true); // sem restrição definida
+    if (allowed.includes(origin)) return callback(null, true);
+    return callback(new Error('Not allowed by CORS: ' + origin));
+  },
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
+app.use(helmet());
+app.use(express.json({ limit: '1mb' }));
+app.use(morgan('dev'));
+
+/** ---------- Healthcheck ---------- **/
+app.get('/health', (req, res) => {
+  res.json({ ok: true });
+});
+
+/** ---------- API Routes ---------- **/
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/clients', clientRoutes);
+app.use('/api/visits', visitRoutes);
+app.use('/api/redemptions', redemptionRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/stores', storeRoutes);
+app.use('/api/import-export', importExportRoutes);
+
+/** ---------- 404 ---------- **/
+app.use((req, res) => {
+  res.status(404).json({ error: 'Not Found' });
+});
+
+/** ---------- Error Handler ---------- **/
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err?.message || err);
+  const status = err.status || 500;
+  res.status(status).json({
+    error: err.message || 'Internal Server Error',
+  });
+});
+
+/** ---------- Start Server ---------- **/
+const PORT = process.env.PORT || 3001;      // Render injeta PORT automaticamente
+const HOST = process.env.HOST || '0.0.0.0'; // manter 0.0.0.0 para containers
+
+app.listen(PORT, HOST, () => {
+  console.log(`✅ Servidor rodando em http://${HOST}:${PORT}`);
+});
+
+module.exports = app;
