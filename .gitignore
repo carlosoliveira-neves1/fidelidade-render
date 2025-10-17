@@ -1,0 +1,19 @@
+@"
+node_modules/
+.env
+dist/
+"@ | Out-File -Encoding utf8 .gitignore
+
+@"
+node_modules/
+.env
+npm-debug.log*
+dist/
+"@ | Out-File -Encoding utf8 backend\.gitignore
+
+@"
+node_modules/
+.env
+npm-debug.log*
+dist/
+"@ | Out-File -Encoding utf8 frontend\.gitignore
