@@ -1,0 +1,11 @@
+// dummy from 'express'; import cors from 'cors'; import helmet from 'helmet'; import dotenv from 'dotenv'; dotenv.config();
+import authRouter from './routes/auth.js'; import clientsRouter from './routes/clients.js'; import visitsRouter from './routes/visits.js'; import reportsRouter from './routes/reports.js';
+import usersRouter from './routes/users.js'; import storesRouter from './routes/stores.js'; import importExportRouter from './routes/import_export.js'; import redemptionsRouter from './routes/redemptions.js';
+const app = express(); app.use(helmet()); app.use(express.json());
+const origins=(process.env.ALLOWED_ORIGINS||'').split(',').map(s=>s.trim()).filter(Boolean);
+app.use(cors({origin:(o,cb)=>{ if(!o||origins.includes(o)) return cb(null,true); cb(new Error('CORS not allowed:'+o)) }, credentials:true}));
+app.get('/health', (_req,res)=>res.json({ok:true}));
+app.use('/api/auth', authRouter); app.use('/api/clients', clientsRouter); app.use('/api/visits', visitsRouter); app.use('/api/reports', reportsRouter);
+app.use('/api/users', usersRouter); app.use('/api/stores', storesRouter); app.use('/api/import-export', importExportRouter); app.use('/api/redemptions', redemptionsRouter);
+app.get('/', (_req,res)=>res.json({name:'CDC Fidelidade API', version:'2.2.0'}));
+const PORT=Number(process.env.PORT||3001), HOST=process.env.HOST||'0.0.0.0'; app.listen(PORT,HOST,()=>console.log(`✅ Backend http://${HOST}:${PORT}`));
